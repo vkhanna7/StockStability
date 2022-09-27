@@ -1,0 +1,523 @@
+---
+title: "STAT 240 Final Project Draft"
+output: html_document
+---
+
+Group: 5
+
+Names: Vasudha Khanna, Tovah Frockt, Pranav Dronavalli, Leo Liu
+
+
+## Background
+```{r setup, include=FALSE,echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(formattable)
+library(ggplot2)
+library(dplyr)
+source("../scprits/viridis.r")
+source("../scprits/ggprob.r") 
+
+index_data = read.csv("../data/indexData.csv")
+data_info = read.csv("../data/indexInfo.csv")
+stocks = read.csv("../data/ProjectData/indexProcessed.csv")
+```
+
+The stock markets are venues for buyers and sellers to meet to exchange equity shares of public corporations. These equity shares or stocks represents fractional ownership of equity in an organization. Stocks can be traded individually and in groups. The stock values are denoted twice daily and these are called the "opening price" and "closing price" of these stocks. There are multiple factors that influence the stability and volatility of these stocks around the world. 
+
+Some factors affecting stock values are:  
+- news releases on earnings and profits, and future estimated earnings.  
+  - announcement of dividends.  
+-introduction of a new product or a product recall.  
+-securing a new large contract.  
+- employee layoffs.  
+- anticipated takeover or merger.  
+- a change of management.  
+- accounting errors or scandals.  
+
+Since these stocks values are so volatile, investors need to research the past performance and reliability of the different stock markets to predict it's future performance for lucrative returns. The stock markets of each country differ from one another based on a variety of factors. One factor is how much control the governments' have over the market and what policy or administrative mechanisms a government can use to instill trust in the market. No country wants to have a volatile market because that doesn't attract investors, thus depending on the nature of the government, some countries have tighter controls on how much the market can swing in a given amount of time. 
+
+Yahoo Finance, collects and stores the daily opening and closing stock prices from different stock markets across the world. The data set contains the opening and closing stock market values from 1965 to 2021 for a number of stock markets across the world. The dates in our data cover every day the stock markets operated in between these years. The creator of the data went downloaded historic price data for each index and combined them into one CSV. The market values collected are from United States, China, Canada, Germany, Japan, and more. Thus, along with the local market values, exchange rates also play a factor in comparing the final values. A notable fact would be that the United States has two markets- The New York Stock Exchange and the NASDAQ. A major chunk- approximately 14% of the data is collected from the United States. The data is downloadable from ^[https://finance.yahoo.com/quote/YHOO/history?ltr=1]
+
+^[https://www.kaggle.com/datasets/mattiuzc/stock-exchange-data?resource=d   ownload&select=indexInfo.csv.]
+
+Key Variables are: 
+```{r echo=F}
+Variable<-c("Index","Year","Month","Open","High","Close","Low")
+Description<-c("Ticker symbol for the stock market","Year","Month","Opening price of the market","Highest price of the day in the market","Closing price of the market","Lowest price of the day in the market")
+
+tibble1 = tibble(Variable,Description)
+
+formattable(tibble1, align =c("l","l","l","l","l", "l", "l", "l", "l"), 
+            list(`Indicator Name` = formatter(
+              "span", style = ~ style(color = "grey",font.weight = "bold")) 
+))
+```
+
+The report will assess how the different markets have performed over the years and which market has been most stable over the course of these years. We find that for the stock market of most countries, the average closing price for month to month, does not change more than the average difference. 
+
+
+## Initial Observations 
+```{r combining data, echo=F,message=F}
+complete_data = stocks %>%
+  left_join(data_info) %>%
+  mutate(year = year(Date), month = month(Date)) %>%
+  group_by(year, month, Region) %>%
+  summarise(Region, Index, average_open = mean(Open), average_close = mean(Close), average_diff = average_open - average_close) %>%
+  distinct() %>%
+  drop_na() %>%
+  mutate(change = (average_open - average_close)/average_open, success = case_when(
+           abs(change) > 0.0025 ~ 0,
+           abs(change) <= 0.0025 ~ 1))
+
+ggplot(complete_data) +
+  geom_point(aes(year, average_diff, color = Region)) +
+  facet_wrap(~Region) +
+  geom_smooth(aes(year, average_diff)) +
+  xlab("Year") +
+  ylab("Average Difference in Opening and Closing Price") +
+  ggtitle("Market Performances by Region between 1966 and 2021")
+```
+
+Here is a graph that shows the stock market values of the different markets in different countries. It shows the variability in the market values and how they vary within a year and over the years.The line in each graph shows how the average value of the market has changed across the years.
+
+
+```{r, include=F, echo=F}
+# h0: 75% of the months, the market is stable 
+# ha: average diff < 0
+#we need to define what the stability is 
+
+#Canada
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_canada = df1 %>%
+  filter(Region == "Canada") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_canada = df1 %>%
+  filter(Region == "Canada") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_canada = df1 %>%
+  filter(Region == "Canada") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_canada
+n_canada
+p_hat_canada
+
+p0 = .75
+p_91 = dbinom(x_canada, n_canada, p0)
+p_91
+
+temp = tibble(x = 0:n_canada, prob = dbinom(x, n_canada, p0)) %>%
+  filter(prob < p_91 | near(prob, p_91)) 
+
+canada_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+canada_p
+
+#China
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_china = df1 %>%
+  filter(Region == "China") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_china = df1 %>%
+  filter(Region == "China") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_china = df1 %>%
+  filter(Region == "China") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_china
+n_china
+p_hat_china
+
+p0 = .75
+p_322 = dbinom(x_china, n_china, p0)
+p_322
+
+temp = tibble(x = 0:n_china, prob = dbinom(x, n_china, p0)) %>%
+  filter(prob < p_322 | near(prob, p_322)) 
+
+china_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#Europe
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_europe = df1 %>%
+  filter(Region == "Europe") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_europe = df1 %>%
+  filter(Region == "Europe") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_europe = df1 %>%
+  filter(Region == "Europe") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_europe
+n_europe
+p_hat_europe
+
+p0 = .75
+p_141 = dbinom(x_europe, n_europe, p0)
+p_141
+
+temp = tibble(x = 0:n_europe, prob = dbinom(x, n_europe, p0)) %>%
+  filter(prob < p_141 | near(prob, p_141)) 
+
+europe_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+
+
+#Germany
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_germany = df1 %>%
+  filter(Region == "Germany") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_germany = df1 %>%
+  filter(Region == "Germany") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_germany = df1 %>%
+  filter(Region == "Germany") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_germany
+n_germany
+p_hat_germany
+
+p0 = .75
+p_315 = dbinom(x_germany, n_germany, p0)
+p_315
+
+temp = tibble(x = 0:n_germany, prob = dbinom(x, n_germany, p0)) %>%
+  filter(prob < p_315| near(prob, p_315)) 
+
+germany_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#Hong Kong
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_hk = df1 %>%
+  filter(Region == "Hong Kong") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_hk = df1 %>%
+  filter(Region == "Hong Kong") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_hk = df1 %>%
+  filter(Region == "Hong Kong") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_hk
+n_hk
+p_hat_hk
+
+p0 = .75
+p_329 = dbinom(x_hk, n_hk, p0)
+p_329
+
+temp = tibble(x = 0:n_hk, prob = dbinom(x, n_hk, p0)) %>%
+  filter(prob < p_329| near(prob, p_329)) 
+
+hk_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#India
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_india = df1 %>%
+  filter(Region == "India") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_india = df1 %>%
+  filter(Region == "India") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_india = df1 %>%
+  filter(Region == "India") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_india
+n_india
+p_hat_india
+
+p0 = .75
+p_115 = dbinom(x_india, n_india, p0)
+p_115
+
+temp = tibble(x = 0:n_india, prob = dbinom(x, n_india, p0)) %>%
+  filter(prob < p_115| near(prob, p_115)) 
+
+india_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#Japan
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_japan = df1 %>%
+  filter(Region == "Japan") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_japan = df1 %>%
+  filter(Region == "Japan") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_japan = df1 %>%
+  filter(Region == "Japan") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_japan
+n_japan
+p_hat_japan
+
+p0 = .75
+p_593 = dbinom(x_japan, n_japan, p0)
+p_593
+
+temp = tibble(x = 0:n_japan, prob = dbinom(x, n_japan, p0)) %>%
+  filter(prob < p_593| near(prob, p_593)) 
+
+japan_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#South Africa
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_sa = df1 %>%
+  filter(Region == "South Africa") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_sa = df1 %>%
+  filter(Region == "South Africa") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_sa = df1 %>%
+  filter(Region == "South Africa") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_sa
+n_sa
+p_hat_sa
+
+p0 = .75
+p_97 = dbinom(x_sa, n_sa, p0)
+p_97
+
+temp = tibble(x = 0:n_sa, prob = dbinom(x, n_sa, p0)) %>%
+  filter(prob < p_97| near(prob, p_97)) 
+
+sa_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#Switzerland
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_switzerland = df1 %>%
+  filter(Region == "Switzerland") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_switzerland = df1 %>%
+  filter(Region == "Switzerland") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_switzerland = df1 %>%
+  filter(Region == "Switzerland") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_switzerland
+n_switzerland
+p_hat_switzerland
+
+p0 = .75
+p_303 = dbinom(x_switzerland, n_switzerland, p0)
+p_303
+
+temp = tibble(x = 0:n_switzerland, prob = dbinom(x, n_switzerland, p0)) %>%
+  filter(prob < p_303| near(prob, p_303)) 
+
+switzerland_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+
+#Taiwan 
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_taiwan = df1 %>%
+  filter(Region == "Taiwan") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_taiwan = df1 %>%
+  filter(Region == "Taiwan") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_taiwan = df1 %>%
+  filter(Region == "Taiwan") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_taiwan
+n_taiwan
+p_hat_taiwan
+
+p0 = .75
+p_91 = dbinom(x_taiwan, n_taiwan, p0)
+p_91
+
+temp = tibble(x = 0:n_taiwan, prob = dbinom(x, n_taiwan, p0)) %>%
+  filter(prob < p_91 | near(prob, p_91)) 
+
+taiwan_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#United States
+df1 = complete_data %>%
+  ungroup() %>%
+  group_by(Region) %>%
+  mutate(n = n(), success_sum = sum(success), p_hat = success_sum/n)
+
+x_us = df1 %>%
+  filter(Region == "United States") %>%
+  filter(row_number() == 1) %>%
+  pull(success_sum)
+n_us = df1 %>%
+  filter(Region == "United States") %>%
+  filter(row_number() == 1) %>%
+  pull(n)
+p_hat_us = df1 %>%
+  filter(Region == "United States") %>%
+  filter(row_number() == 1) %>%
+  pull(p_hat)
+
+x_us
+n_us
+p_hat_us
+
+p0 = .75
+p_1204 = dbinom(x_us, n_us, p0)
+p_1204
+
+temp = tibble(x = 0:n_us, prob = dbinom(x, n_us, p0)) %>%
+  filter(prob < p_1204| near(prob, p_1204)) 
+
+us_p = temp %>%
+  summarise(p_value = sum(prob)) %>%
+  pull(p_value)
+
+#In Canada, we accept the null hypothesis that the average difference is greater than 0 
+#In Taiwan, we reject the null hypothesis that the average difference is less than 0 
+```
+
+## Analysis 
+
+```{r, echo=F}
+analysis = tibble(Region = c("Canada", "China", "Europe", "Germany", "Hong Kong", "India", "Japan", "South Africa", "Switzerland", "Taiwan", "United States"), Successes = c(x_canada, x_china, x_europe, x_germany, x_hk, x_india, x_japan, x_sa, x_switzerland, x_taiwan, x_us), Total = c(n_canada, n_china, n_europe, n_germany, n_hk, n_india, n_japan, n_sa, n_switzerland, n_taiwan, n_us), ExpectedValue = c(n_canada * .75, n_china* .75, n_europe* .75, n_germany* .75, n_hk* .75, n_india* .75, n_japan* .75, n_sa* .75, n_switzerland* .75, n_taiwan* .75, n_us* .75), Pvalue = c(canada_p, china_p, europe_p, germany_p, hk_p, india_p, japan_p, sa_p, switzerland_p, taiwan_p, us_p)) 
+
+
+formattable(analysis, align =c("l","l","l","l","l", "l", "l", "l", "l"), 
+            list(`Indicator Name` = formatter(
+              "span", style = ~ style(color = "grey",font.weight = "bold")) 
+))
+```
+
+
+
+Our hypothesis test aimed to measure the average stock market stability for each country. We chose a binomial distribution because there were not enough observations for each country for us to use a continuous normal distribution. The discrete nature of opening and closing prices encourages the use of a binomial distribution. Our null hypothesis is that in any given month in a particular country, there is a 75% chance that month will fall in our range of stability. We define stability as within a 0.25% of the average opening price divided by the average closing price of the month. Our test statistic is the amount of months that are stable.
+
+For each country, we graphed the binomial distribution of stock market stability. The horizontal line represents the p-value for each country respectively. To calculate this p-value, we created a tibble with 'x' values until our 'n'. Then we used 'dbinom()' to calculate the probability of each 'x' occurring. We filtered so that we were left with only probabilities that were less favorable or more extreme than our observed test statistic for each country. Then, we summed the probabilities to compute our p-value. If the p-value is less than 0.03 then we rejected the null hypothesis each month has a 75% chance of being stable. 
+
+According to our hypothesis test, Germany, India, and Taiwan have stock markets have a 75% chance of being stable during any given month. According to our hypothesis test, Canada, China, Europe, Hong Kong, Japan, South Africa, Switzerland, and the United States do not support a the null hypothesis that there is a 75% chance of stability within a given month. To illustrate this graphically, we have included one graph from Germany (considered stable, accepting the null hypothesis) and one graph from China (considered unstable, rejecting the null hypothesis). The dashed vertical lines on each graph represent the distance from the mean in the binomial distribution. The dashed lines indicate the value for which every point in the tails that are more extreme or less extreme than the test-statistic. Every point to the left or right of the dashed lines, in the tails, are values that are more extreme. For Germany, the red dashed line represents the number of months that are stable from the sample size, where we accept our null hypothesis of stability. For China, the red dashed line represents the number of months that are stable from the sample size, where we reject our null hypothesis of stability. 
+
+According to our table, if the p-value for a country is very low (and we reject the null hypothesis for that country), and the successes are greater than the expected value, then the market in that country is more stable, by our definition, than the null. If the p-value is low and the successes are less than the expected value, then given our definition of stability, the market in that country is generally less stable than the null. Here, we are purely looking at stability, rather than if the market is increasing or decreasing. When a country is unstable, we cannot say whether it is unstable in an increasing or decreasing direction because our definition is a range of stability using the absolute value of 0.25% from closing price to opening price. 
+
+
+
+```{r, echo=F}
+gbinom(n_china,p0, scale=TRUE) +
+  geom_hline(yintercept = dbinom(x_china,n_china,p0)) +
+  geom_vline(xintercept = x_china, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = 521, linetype = "dashed") +
+  ggtitle("China")
+
+gbinom(n_germany,p0, scale=TRUE) +
+  geom_hline(yintercept = dbinom(x_germany,n_germany,p0)) +
+  geom_vline(xintercept = x_germany, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = 288, linetype = "dashed") +
+  ggtitle("Germany")
+```
+
+## Discussion 
+
+Provide broader interpretations of your analysis and describe how to interpret your results with respect to your question of interest.
+
+Globally, the stock markets have been relatively stable over the years of our analysis (1965-2021). The most stable countries according to our analysis are Japan, Canada, and China. The least stable counties are Taiwan, Germany, and India. Stability does not necessarily encompass the whole picture. Lack of stability under our interpretation can also mean growth. If a country's stock market isn't stable that means that more than 25% of the time the market changes in more than the average difference between the opening and closing price of that market. 
+
+Potential shortcomings of our analysis does not include government mechanisms for stabilizing the stock market in their respective countries. This means that our observations are only based on raw data. We chose a narrow definition of stability in our project. Other people may define stability as either higher or lower than we did, which would impact their analysis. In our analysis, we kept our outliers because they are good for our definition of stability. In our definition of stability, we want the outliers because they give instances of the market being unstable. Removing outliers could skew our data to make markets look more stable than they actually are. In our definition of stability there are potential drawbacks. We defined stability after looking at our data and as a monthly basis rather than a daily basis. Defining stability as a monthly number could potentially make markets seem more stable than they are, on a daily basis there are days with extreme gains and extreme losses. 
+
+Future directions for additional work could include looking at the average difference in daily stock market prices rather than monthly prices. This additional analysis could be helpful in determining stability over shorter, more discrete periods of time. A new question using our methodology could be analyzing the stability of a particular stock in a given market. Using our framework, one could see which stocks are most and least stable in a given market based on daily opening and closing prices of that stock. A different approach is redefining how we measured stability. In a new method, we could define stability as increasing or decreasing by less than 5% of the previous months' average closing price. 
+
+References 
